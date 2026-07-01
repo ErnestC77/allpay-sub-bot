@@ -224,6 +224,20 @@ async def save_card_token(tg_id: int, token: str, card_mask: str | None,
             await session.commit()
 
 
+async def grant_subscription(tg_id: int, end_at, plan_id: int | None = None) -> Subscription:
+    """Выдаёт подписку вручную (импорт существующих подписчиков) до end_at."""
+    await get_or_create_user(tg_id)  # гарантируем наличие пользователя
+    async with get_sessionmaker()() as session:
+        sub = Subscription(
+            user_id=tg_id, plan_id=plan_id, start_at=utcnow(),
+            end_at=end_at, status="active",
+        )
+        session.add(sub)
+        await session.commit()
+        await session.refresh(sub)
+        return sub
+
+
 async def set_last_plan(tg_id: int, plan_id: int) -> None:
     async with get_sessionmaker()() as session:
         user = await session.get(User, tg_id)

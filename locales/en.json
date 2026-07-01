@@ -40,6 +40,7 @@
   "auto_state_on": "on",
   "auto_state_off": "off",
   "auto_card": " · card {mask}",
+  "import_welcome": "👋 Hello!\n\nYou've been added to the private channel's helper bot that tracks your subscription.\n\n✅ Your subscription is active until <b>{date}</b>.\n\nThe bot will remind you before it ends, and you can renew it in “My subscription”. Open the menu with /start.",
 
   "subscription_active": "💳 <b>Your subscription</b>\n\nPlan: {title}\nStatus: active ✅\nValid until: <b>{date}</b>",
   "subscription_none": "You don't have an active subscription yet.\nGet one in the “Plans” section.",

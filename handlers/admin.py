@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import BaseFilter, Command
 from aiogram.fsm.context import FSMContext
@@ -14,8 +16,12 @@ from aiogram.types import (CallbackQuery, InlineKeyboardButton,
 from config import Config
 from db import crud
 from db.models import Plan, ReminderRule
-from states import AdminEditPlan, AdminReminder
+from i18n import normalize_lang, t
+from keyboards.reply import main_menu
+from states import AdminEditPlan, AdminImport, AdminReminder
+from utils import format_dt, parse_admin_datetime
 
+logger = logging.getLogger("admin")
 router = Router()
 
 
@@ -72,6 +78,7 @@ def _admin_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📆 Тарифы", callback_data="adm:plans")],
         [InlineKeyboardButton(text="🔔 Уведомления", callback_data="adm:reminders")],
+        [InlineKeyboardButton(text="👥 Импорт подписчиков", callback_data="adm:import")],
     ])
 
 
@@ -314,3 +321,70 @@ async def rem_edit_text(message: Message, state: FSMContext) -> None:
     await crud.update_reminder_rule(rule_id, text=(message.text or "").strip())
     await message.answer("✅ Текст обновлён.")
     await _show_reminders(message)
+
+
+# ==================== Импорт существующих подписчиков ====================
+
+@router.callback_query(F.data == "adm:import")
+async def cb_import(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminImport.end_date)
+    await callback.answer()
+    await callback.message.answer(
+        "👥 <b>Импорт подписчиков</b>\n\n"
+        "Шаг 1/2. Введите дату и время окончания подписки для этой партии (UTC).\n"
+        "Формат: <code>ДД.ММ.ГГГГ</code> или <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>\n"
+        "Например: <code>31.12.2026</code> или <code>31.12.2026 20:00</code>")
+
+
+@router.message(AdminImport.end_date, F.text)
+async def import_date(message: Message, state: FSMContext) -> None:
+    end_at = parse_admin_datetime(message.text or "")
+    if end_at is None:
+        await message.answer("❌ Неверный формат. Пример: 31.12.2026 или 31.12.2026 20:00")
+        return
+    await state.update_data(end_iso=end_at.isoformat())
+    await state.set_state(AdminImport.ids)
+    await message.answer(
+        "Шаг 2/2. Пришлите Telegram ID подписчиков — через пробел, запятую или с новой строки.\n"
+        "Пример: <code>910256253 12345678 87654321</code>")
+
+
+@router.message(AdminImport.ids, F.text)
+async def import_ids(message: Message, state: FSMContext) -> None:
+    from datetime import datetime
+
+    data = await state.get_data()
+    await state.clear()
+    end_at = datetime.fromisoformat(data["end_iso"])
+
+    raw = (message.text or "").replace(",", " ").replace("\n", " ")
+    ids = [int(tok) for tok in raw.split() if tok.strip().lstrip("-").isdigit()]
+    if not ids:
+        await message.answer("❌ Не нашёл ни одного числового ID. Начните заново: /admin")
+        return
+
+    added = notified = 0
+    failed_notify: list[int] = []
+    for uid in dict.fromkeys(ids):  # уникальные, сохраняя порядок
+        try:
+            sub = await crud.grant_subscription(uid, end_at)
+            added += 1
+        except Exception:  # noqa: BLE001
+            logger.exception("Импорт: не удалось создать подписку uid=%s", uid)
+            continue
+        try:
+            u = await crud.get_or_create_user(uid)
+            lang = normalize_lang(u.language)
+            await message.bot.send_message(
+                uid, t("import_welcome", lang, date=format_dt(sub.end_at, u.timezone)),
+                reply_markup=main_menu(lang))
+            notified += 1
+        except Exception:  # noqa: BLE001 — обычно пользователь не запускал бота
+            failed_notify.append(uid)
+
+    report = (f"✅ Добавлено подписок: <b>{added}</b>\n"
+              f"✉️ Уведомлено: <b>{notified}</b>\n"
+              f"⚠️ Не удалось написать (не запускали бота): <b>{len(failed_notify)}</b>")
+    if failed_notify:
+        report += "\n<code>" + " ".join(str(x) for x in failed_notify[:100]) + "</code>"
+    await message.answer(report)

@@ -28,3 +28,8 @@ class AdminReminder(StatesGroup):
     add_days = State()   # ждём число дней для нового порога
     add_text = State()   # ждём текст для нового порога
     edit_text = State()  # ждём новый текст для существующего порога
+
+
+class AdminImport(StatesGroup):
+    end_date = State()   # ждём дату/время окончания для партии
+    ids = State()        # ждём список Telegram ID
