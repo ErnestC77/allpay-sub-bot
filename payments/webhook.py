@@ -116,14 +116,39 @@ async def _send_channel_invite(bot: Bot, config: Config, user_id: int) -> None:
         logger.exception("Не удалось выдать ссылку в канал user=%s", user_id)
 
 
-async def _success_page(request: web.Request) -> web.Response:
-    return web.Response(
-        text="Оплата обрабатывается. Можно вернуться в Telegram ✅",
-        content_type="text/plain",
-    )
+def _success_html(bot_username: str) -> str:
+    back = f"https://t.me/{bot_username}" if bot_username else "https://t.me"
+    return f"""<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Оплата</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>body{{font-family:-apple-system,Segoe UI,Roboto,sans-serif;text-align:center;
+padding:48px 20px;color:#222}}a{{display:inline-block;margin-top:20px;padding:12px 20px;
+background:#2ea6ff;color:#fff;border-radius:10px;text-decoration:none}}</style></head>
+<body>
+<h2>✅ Оплата обрабатывается</h2>
+<p>Подписка активируется автоматически. Возвращаем вас в бота…</p>
+<a href="{back}">Вернуться в бота</a>
+<script>
+  try {{
+    if (window.Telegram && Telegram.WebApp) {{
+      Telegram.WebApp.ready();
+      setTimeout(function(){{ try {{ Telegram.WebApp.close(); }} catch(e){{}} }}, 1800);
+    }}
+  }} catch (e) {{}}
+</script>
+</body></html>"""
 
 
-def setup_routes(app: web.Application, bot: Bot, config: Config) -> None:
+def make_success_handler(bot_username: str):
+    async def handler(request: web.Request) -> web.Response:
+        return web.Response(text=_success_html(bot_username), content_type="text/html")
+    return handler
+
+
+def setup_routes(app: web.Application, bot: Bot, config: Config,
+                 bot_username: str = "") -> None:
     app.router.add_post(config.allpay_webhook_path, make_webhook_handler(bot, config))
-    app.router.add_get("/allpay/success", _success_page)
+    app.router.add_get("/allpay/success", make_success_handler(bot_username))
     app.router.add_get("/health", lambda r: web.Response(text="ok"))

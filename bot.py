@@ -52,8 +52,9 @@ async def main() -> None:
     dp = build_dispatcher(config)
 
     # aiohttp-сервер для webhook AllPay (заодно биндит PORT — нужно для хостинга).
+    me = await bot.get_me()
     app = web.Application()
-    setup_routes(app, bot, config)
+    setup_routes(app, bot, config, me.username or "")
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, host="0.0.0.0", port=config.port)

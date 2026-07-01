@@ -1,7 +1,7 @@
 """Inline-клавиатуры."""
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from db.models import Plan
@@ -46,8 +46,12 @@ def payment_methods_kb(plan_id: int, lang: str, auto_renew: bool = False) -> Inl
 
 
 def pay_url_kb(url: str, lang: str) -> InlineKeyboardMarkup:
+    # Web App открывает страницу оплаты ВНУТРИ Telegram; success_url затем
+    # закрывает окно и возвращает в бота. Запасная обычная ссылка — на случай,
+    # если встроенный webview не потянет страницу банка/3DS.
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t("pay_open_button", lang), url=url)],
+        [InlineKeyboardButton(text=t("pay_open_button", lang), web_app=WebAppInfo(url=url))],
+        [InlineKeyboardButton(text=t("pay_open_ext", lang), url=url)],
     ])
 
 

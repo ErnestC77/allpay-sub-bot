@@ -27,7 +27,8 @@
   "email_saved": "✅ E-mail saved.",
 
   "payment_created": "🧾 Invoice created.\nTap the button below to proceed to payment.",
-  "pay_open_button": "💳 Proceed to payment",
+  "pay_open_button": "💳 Pay inside the bot",
+  "pay_open_ext": "🌐 Open in browser",
   "payment_error": "⚠️ Could not create the invoice. Please try again later or contact support.",
   "payment_success_notify": "✅ Payment received!\nYour subscription is active until <b>{date}</b>.",
   "channel_access": "🔓 Access to the private channel is open!\nTap the button below to join (single-use link).",
