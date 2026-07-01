@@ -25,6 +25,7 @@ class Config:
     support_contact: str
     allpay_login: str
     allpay_key: str
+    allpay_webhook_secret: str
     webhook_base_url: str
     port: int
     database_url: str
@@ -64,6 +65,7 @@ def load_config() -> Config:
         support_contact=os.getenv("SUPPORT_CONTACT", "@admin").strip(),
         allpay_login=os.getenv("ALLPAY_LOGIN", "").strip(),
         allpay_key=os.getenv("ALLPAY_KEY", "").strip(),
+        allpay_webhook_secret=os.getenv("ALLPAY_WEBHOOK_SECRET", "").strip(),
         webhook_base_url=os.getenv("WEBHOOK_BASE_URL", "http://localhost").strip(),
         port=int(os.getenv("PORT", "8080")),
         database_url=database_url,
