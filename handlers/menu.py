@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from aiogram import F, Router
 from aiogram.filters import StateFilter
-from aiogram.types import FSInputFile, Message
+from aiogram.types import CallbackQuery, FSInputFile, Message
 
 from config import Config
 from handlers.common import WELCOME_IMAGE, get_user_and_lang
@@ -24,6 +24,19 @@ async def show_welcome(message: Message, lang: str) -> None:
         await message.answer(caption, reply_markup=welcome_kb(lang))
     # Reply-меню отдельным сообщением (inline и reply нельзя совместить).
     await message.answer(t("menu_hint", lang), reply_markup=main_menu(lang))
+
+
+@router.callback_query(F.data == "nav:close")
+async def cb_nav_close(callback: CallbackQuery) -> None:
+    """«Назад» на верхнеуровневых экранах — убираем текущее inline-сообщение."""
+    await callback.answer()
+    try:
+        await callback.message.delete()
+    except Exception:  # noqa: BLE001
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 # --- Обработка нажатий нижнего меню ---

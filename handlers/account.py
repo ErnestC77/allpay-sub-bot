@@ -9,7 +9,7 @@ from db import crud
 from db.models import User
 from handlers.common import get_user_and_lang
 from i18n import lang_name, t
-from keyboards.inline import account_kb, languages_kb
+from keyboards.inline import account_kb
 from states import AccountEdit
 from utils import is_valid_email, is_valid_tz
 
@@ -23,13 +23,6 @@ async def show_account(message: Message, user: User, lang: str) -> None:
           tz=user.timezone, email=email),
         reply_markup=account_kb(lang),
     )
-
-
-@router.callback_query(F.data == "acc:lang")
-async def cb_acc_lang(callback: CallbackQuery) -> None:
-    lang = (await get_user_and_lang(callback.from_user.id))[1]
-    await callback.answer()
-    await callback.message.answer(t("choose_language", lang), reply_markup=languages_kb())
 
 
 @router.callback_query(F.data == "acc:email")
