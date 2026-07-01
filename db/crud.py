@@ -151,11 +151,19 @@ async def mark_paid_and_activate(order_id: str, allpay_ref: str | None) -> Subsc
         if base.tzinfo is None:
             base = base.replace(tzinfo=timezone.utc)
 
+        # Прибавляем срок к концу текущей подписки (дни накапливаются корректно),
+        # а время окончания привязываем к моменту ПОСЛЕДНЕГО оформления (now),
+        # чтобы ориентир был по последней покупке, а не по самой первой.
+        end_at = (base + timedelta(days=duration)).replace(
+            hour=now.hour, minute=now.minute,
+            second=now.second, microsecond=now.microsecond,
+        )
+
         subscription = Subscription(
             user_id=payment.user_id,
             plan_id=payment.plan_id,
             start_at=now,
-            end_at=base + timedelta(days=duration),
+            end_at=end_at,
             status="active",
         )
         session.add(subscription)
