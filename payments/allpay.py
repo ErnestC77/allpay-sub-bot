@@ -2,13 +2,11 @@
 
 Документация: https://www.allpay.co.il/en/api-reference
 
-Подпись (sign): из payload убираются поле ``sign`` и пустые значения, оставшиеся
-ключи (включая вложенные элементы ``items``) сортируются по алфавиту, их значения
-соединяются через ``:``, в конец добавляется API-ключ, всё хэшируется SHA256.
-
-ВАЖНО: точный порядок «выравнивания» вложенных ``items`` стоит сверить с официальным
-PHP-примером AllPay из личного кабинета — здесь используется представление с
-dotted-ключами (``items.0.name`` и т.п.), которое затем сортируется по ключу.
+Подпись (sign) — точно по официальному алгоритму AllPay (PHP/JS getApiSignature):
+ключи верхнего уровня сортируются по алфавиту; для массива ``items`` элементы берутся
+по порядку, ключи каждого элемента сортируются; **в подпись попадают только непустые
+СТРОКОВЫЕ значения** (числа — price/qty/vat — исключаются!); значения соединяются
+через ``:``, в конец добавляется ``:API_KEY``, всё хэшируется SHA256.
 """
 from __future__ import annotations
 
@@ -21,33 +19,29 @@ import aiohttp
 API_URL = "https://allpay.to/app/?show=getpayment&mode=api11"
 
 
-def _flatten(data: dict[str, Any], prefix: str = "") -> dict[str, str]:
-    """Разворачивает вложенный dict/list в плоский словарь с dotted-ключами."""
-    flat: dict[str, str] = {}
-    for key, value in data.items():
-        full = f"{prefix}{key}"
-        if isinstance(value, dict):
-            flat.update(_flatten(value, f"{full}."))
-        elif isinstance(value, (list, tuple)):
-            for i, item in enumerate(value):
+def _collect_chunks(params: dict[str, Any]) -> list[str]:
+    """Собирает значения для подписи по алгоритму AllPay (только строки)."""
+    chunks: list[str] = []
+    for key in sorted(params.keys()):
+        if key == "sign":
+            continue
+        value = params[key]
+        if isinstance(value, (list, tuple)):
+            for item in value:
                 if isinstance(item, dict):
-                    flat.update(_flatten(item, f"{full}.{i}."))
-                else:
-                    flat[f"{full}.{i}"] = str(item)
-        else:
-            flat[full] = str(value)
-    return flat
+                    for name in sorted(item.keys()):
+                        val = item[name]
+                        if isinstance(val, str) and val.strip() != "":
+                            chunks.append(val)
+        elif isinstance(value, str) and value.strip() != "":
+            chunks.append(value)
+        # нестроковые скаляры (числа, bool, None) в подпись не входят — как в AllPay
+    return chunks
 
 
 def build_sign(payload: dict[str, Any], api_key: str) -> str:
     """Считает SHA256-подпись по правилам AllPay."""
-    flat = _flatten(payload)
-    flat.pop("sign", None)
-    # Убираем пустые значения
-    flat = {k: v for k, v in flat.items() if v != "" and v is not None}
-    values = [flat[k] for k in sorted(flat.keys())]
-    values.append(api_key)
-    raw = ":".join(values)
+    raw = ":".join(_collect_chunks(payload)) + ":" + api_key
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
