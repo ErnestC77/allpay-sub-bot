@@ -1,7 +1,6 @@
 """aiohttp-обработчики для AllPay: webhook подтверждения оплаты и success-страница."""
 from __future__ import annotations
 
-import json
 import logging
 
 from aiogram import Bot
@@ -36,13 +35,17 @@ def make_webhook_handler(bot: Bot, config: Config):
         # пробуем API-ключ как запасной вариант.
         secret = config.allpay_webhook_secret or config.allpay_key
         if not verify_webhook_sign(data, secret):
-            logger.warning("AllPay webhook: неверная подпись, order_id=%s", order_id)
-            # ВРЕМЕННАЯ ДИАГНОСТИКА: тело и подписи для сверки алгоритма/секрета
-            from payments.allpay import build_sign
-            logger.warning("WHDBG payload=%s", json.dumps(data, ensure_ascii=False))
-            logger.warning("WHDBG received=%s exp_secret=%s exp_apikey=%s",
-                           data.get("sign"), build_sign(data, secret),
-                           build_sign(data, config.allpay_key))
+            # Безопасная диагностика: только имена полей, префикс полученной подписи
+            # и признак совпадения с API-ключом. Без значений/PII, без секретов и
+            # без вычисленных подписей.
+            logger.warning(
+                "AllPay webhook: неверная подпись, order_id=%s; fields=%s; "
+                "sign_prefix=%s; match_apikey=%s; webhook_secret_set=%s",
+                order_id, sorted(k for k in data if k != "sign"),
+                str(data.get("sign", ""))[:8],
+                verify_webhook_sign(data, config.allpay_key),
+                bool(config.allpay_webhook_secret),
+            )
             # 200, чтобы AllPay не ретраил бесконечно на «чужих» запросах
             return web.Response(text="bad sign", status=200)
 
