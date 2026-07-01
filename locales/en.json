@@ -19,7 +19,8 @@
   "plan_no_active": "No plans available yet. Please check back later.",
 
   "choose_payment": "Choose a payment method:",
-  "pay_allpay": "💳 Pay by card (AllPay)",
+  "terms_notice": "\n\n📄 Please review the <a href=\"{url}\">terms & conditions</a> before paying.\nBy tapping the payment button you agree to them.",
+  "pay_allpay": "✅ I agree & pay",
 
   "email_ask": "✉️ To complete the subscription, please provide your e-mail.\nWe'll send the receipt and payment confirmation there:",
   "email_invalid": "❌ That doesn't look like an e-mail. Please enter a valid address:",

@@ -42,7 +42,7 @@ async def cb_buy_list(callback: CallbackQuery) -> None:
 # ---------- Шаг 2: карточка тарифа + способы оплаты ----------
 
 @router.callback_query(F.data.startswith("buy:pick:"))
-async def cb_buy_pick(callback: CallbackQuery) -> None:
+async def cb_buy_pick(callback: CallbackQuery, config: Config) -> None:
     user, lang = await get_user_and_lang(callback.from_user.id)
     plan_id = int(callback.data.rsplit(":", 1)[1])
     plan = await crud.get_plan(plan_id)
@@ -54,6 +54,8 @@ async def cb_buy_pick(callback: CallbackQuery) -> None:
     text = t("plan_detail", lang, title=plan.title(lang), description=plan.description(lang),
              days=plan.duration_days, price=plan.price_display(), currency=plan.currency)
     text += "\n\n" + t("choose_payment", lang)
+    if config.terms_url:
+        text += t("terms_notice", lang, url=config.terms_url)
     kb = payment_methods_kb(plan.id, lang, user.auto_renew)
     if plan.image_file_id:
         await callback.message.answer_photo(plan.image_file_id, caption=text, reply_markup=kb)

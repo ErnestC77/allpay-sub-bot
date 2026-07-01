@@ -32,6 +32,7 @@ class Config:
     default_currency: str
     reminder_check_interval: int
     channel_id: str  # ID закрытого канала (например -1001234567890) или @username; пусто = выкл
+    terms_url: str  # ссылка на оферту, показывается перед оплатой
 
     @property
     def channel_chat_id(self) -> int | str | None:
@@ -83,4 +84,5 @@ def load_config() -> Config:
         default_currency=os.getenv("DEFAULT_CURRENCY", "ILS").strip().upper(),
         reminder_check_interval=int(os.getenv("REMINDER_CHECK_INTERVAL", "3600")),
         channel_id=os.getenv("CHANNEL_ID", "").strip(),
+        terms_url=os.getenv("TERMS_URL", "https://anastasiayakubova.com/terms-and-conditions").strip(),
     )
