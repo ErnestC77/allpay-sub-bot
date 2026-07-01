@@ -39,19 +39,52 @@ def _collect_chunks(params: dict[str, Any]) -> list[str]:
     return chunks
 
 
+def _collect_chunks_all(params: dict[str, Any]) -> list[str]:
+    """Как _collect_chunks, но включает ВСЕ непустые значения как строки (числа тоже).
+
+    AllPay подписывает webhook по строковому представлению всех полей, а в JSON
+    часть значений приходит числами — поэтому для проверки webhook нужен этот вариант.
+    """
+    chunks: list[str] = []
+    for key in sorted(params.keys()):
+        if key == "sign":
+            continue
+        value = params[key]
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                if isinstance(item, dict):
+                    for name in sorted(item.keys()):
+                        s = str(item[name])
+                        if s.strip() != "":
+                            chunks.append(s)
+        else:
+            s = str(value)
+            if s.strip() != "":
+                chunks.append(s)
+    return chunks
+
+
 def build_sign(payload: dict[str, Any], api_key: str) -> str:
-    """Считает SHA256-подпись по правилам AllPay."""
+    """Считает SHA256-подпись по правилам AllPay (только строковые значения)."""
     raw = ":".join(_collect_chunks(payload)) + ":" + api_key
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def build_sign_all(payload: dict[str, Any], api_key: str) -> str:
+    """SHA256-подпись, включающая все непустые значения как строки."""
+    raw = ":".join(_collect_chunks_all(payload)) + ":" + api_key
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def verify_webhook_sign(data: dict[str, Any], api_key: str) -> bool:
-    """Проверяет подпись входящего webhook."""
+    """Проверяет подпись webhook, пробуя оба варианта сбора значений."""
     received = str(data.get("sign", ""))
     if not received:
         return False
-    expected = build_sign(data, api_key)
-    return hmac.compare_digest(received.lower(), expected.lower())
+    for expected in (build_sign(data, api_key), build_sign_all(data, api_key)):
+        if hmac.compare_digest(received.lower(), expected.lower()):
+            return True
+    return False
 
 
 def _extract_payment_url(response: dict[str, Any]) -> str | None:

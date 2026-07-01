@@ -39,11 +39,13 @@ def make_webhook_handler(bot: Bot, config: Config):
             # и признак совпадения с API-ключом. Без значений/PII, без секретов и
             # без вычисленных подписей.
             logger.warning(
-                "AllPay webhook: неверная подпись, order_id=%s; fields=%s; "
-                "sign_prefix=%s; match_apikey=%s; webhook_secret_set=%s",
-                order_id, sorted(k for k in data if k != "sign"),
+                "AllPay webhook: неверная подпись, order_id=%s; field_types=%s; "
+                "sign_prefix=%s; match_apikey=%s; match_login=%s; webhook_secret_set=%s",
+                order_id,
+                {k: type(v).__name__ for k, v in data.items() if k != "sign"},
                 str(data.get("sign", ""))[:8],
                 verify_webhook_sign(data, config.allpay_key),
+                verify_webhook_sign(data, config.allpay_login),
                 bool(config.allpay_webhook_secret),
             )
             # 200, чтобы AllPay не ретраил бесконечно на «чужих» запросах
