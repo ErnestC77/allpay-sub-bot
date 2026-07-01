@@ -1,0 +1,50 @@
+{
+  "choose_language": "🌍 Выберите язык / Choose your language:",
+  "language_saved": "Язык сохранён: {lang}",
+
+  "welcome": "👋 Добро пожаловать!\n\nЗдесь вы можете оформить подписку прямо в этом боте.\nНажмите кнопку ниже, чтобы выбрать тариф.",
+  "btn_buy": "🛒 Купить подписку",
+
+  "menu_plans": "📆 Тарифные планы",
+  "menu_subscription": "💳 Моя подписка",
+  "menu_account": "👤 Мой аккаунт",
+  "menu_support": "🤝 Поддержка",
+  "menu_hint": "Выберите раздел в меню ниже 👇",
+
+  "btn_back": "← Назад",
+
+  "choose_duration": "Выберите срок подписки:",
+  "plan_button": "{title} | {days} дней | {price} {currency}",
+  "plan_detail": "<b>{title}</b>\n\n{description}\n\n⏳ Срок: {days} дней\n💰 Цена: {price} {currency}",
+  "plan_no_active": "Пока нет доступных тарифов. Загляните позже.",
+
+  "choose_payment": "Выберите способ оплаты:",
+  "pay_allpay": "💳 Оплатить картой (AllPay)",
+
+  "email_ask": "✉️ Для оформления подписки укажите ваш e-mail.\nНа него придёт чек и подтверждение оплаты:",
+  "email_invalid": "❌ Похоже, это не e-mail. Введите корректный адрес:",
+  "email_saved": "✅ E-mail сохранён.",
+
+  "payment_created": "🧾 Счёт на оплату создан.\nНажмите кнопку ниже, чтобы перейти к оплате.",
+  "pay_open_button": "💳 Перейти к оплате",
+  "payment_error": "⚠️ Не удалось создать счёт. Попробуйте позже или обратитесь в поддержку.",
+  "payment_success_notify": "✅ Оплата получена!\nВаша подписка активна до <b>{date}</b>.",
+
+  "subscription_active": "💳 <b>Ваша подписка</b>\n\nТариф: {title}\nСтатус: активна ✅\nДействует до: <b>{date}</b>",
+  "subscription_none": "У вас пока нет активной подписки.\nОформите её в разделе «Тарифные планы».",
+  "btn_renew": "🔄 Продлить",
+
+  "account_title": "👤 <b>Мой аккаунт</b>",
+  "account_body": "👤 <b>Мой аккаунт</b>\n\n— <i>Telegram ID:</i> {tg_id}\n— <i>Язык:</i> {lang}\n— <i>Часовой пояс:</i> {tz}\n— <i>Почта:</i> {email}\n\nЗдесь можно управлять и настраивать свой аккаунт:",
+  "account_email_none": "Отсутствует",
+  "btn_account_lang": "🌐 Язык",
+  "btn_account_tz": "🕒 Часовой пояс",
+  "btn_account_email": "✉️ Почта",
+  "account_email_ask": "Введите новый e-mail:",
+  "account_email_updated": "✅ E-mail обновлён.",
+  "account_tz_ask": "Отправьте ваш часовой пояс в формате UTC±ЧЧ (например, UTC+3):",
+  "account_tz_invalid": "❌ Неверный формат. Пример: UTC+3 или UTC-5",
+  "account_tz_updated": "✅ Часовой пояс обновлён: {tz}",
+
+  "support_text": "🤝 <b>Поддержка</b>\n\nЕсли у вас есть вопросы — напишите нашему администратору:\n{contact}"
+}

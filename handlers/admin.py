@@ -1,0 +1,316 @@
+"""Админ-панель внутри бота: управление тарифами.
+
+Доступ только для Telegram ID из ADMIN_IDS. Все тексты — на русском (оператор один).
+Редактируются русские поля тарифа; английские подхватываются с фолбэком на русские.
+"""
+from __future__ import annotations
+
+from aiogram import F, Router
+from aiogram.filters import BaseFilter, Command
+from aiogram.fsm.context import FSMContext
+from aiogram.types import (CallbackQuery, InlineKeyboardButton,
+                           InlineKeyboardMarkup, Message)
+
+from config import Config
+from db import crud
+from db.models import Plan, ReminderRule
+from states import AdminEditPlan, AdminReminder
+
+router = Router()
+
+
+class IsAdmin(BaseFilter):
+    async def __call__(self, event: Message | CallbackQuery, config: Config) -> bool:
+        return bool(event.from_user) and event.from_user.id in config.admin_ids
+
+
+# Ограничиваем весь роутер администраторами.
+router.message.filter(IsAdmin())
+router.callback_query.filter(IsAdmin())
+
+
+def _plans_list_kb(plans: list[Plan]) -> InlineKeyboardMarkup:
+    rows = []
+    for p in plans:
+        mark = "🟢" if p.is_active else "🔴"
+        rows.append([InlineKeyboardButton(
+            text=f"{mark} {p.title_ru or p.title_en or ('#'+str(p.id))} · "
+                 f"{p.duration_days}д · {p.price_display()} {p.currency}",
+            callback_data=f"adm:plan:{p.id}")])
+    rows.append([InlineKeyboardButton(text="← В меню", callback_data="adm:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _plan_edit_kb(plan: Plan) -> InlineKeyboardMarkup:
+    toggle = "Скрыть 🔴" if plan.is_active else "Показать 🟢"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💰 Цена", callback_data=f"adm:edit:price:{plan.id}"),
+         InlineKeyboardButton(text="⏳ Срок (дни)", callback_data=f"adm:edit:days:{plan.id}")],
+        [InlineKeyboardButton(text="📝 Название", callback_data=f"adm:edit:title:{plan.id}"),
+         InlineKeyboardButton(text="📄 Описание", callback_data=f"adm:edit:desc:{plan.id}")],
+        [InlineKeyboardButton(text="🖼 Фото", callback_data=f"adm:edit:image:{plan.id}")],
+        [InlineKeyboardButton(text=toggle, callback_data=f"adm:toggle:{plan.id}")],
+        [InlineKeyboardButton(text="← К списку", callback_data="adm:list")],
+    ])
+
+
+def _plan_summary(plan: Plan) -> str:
+    return (f"<b>Тариф #{plan.id}</b>\n\n"
+            f"Название (RU): {plan.title_ru or '—'}\n"
+            f"Описание (RU): {plan.description_ru or '—'}\n"
+            f"Срок: {plan.duration_days} дней\n"
+            f"Цена: {plan.price_display()} {plan.currency}\n"
+            f"Фото: {'есть' if plan.image_file_id else 'нет'}\n"
+            f"Статус: {'активен 🟢' if plan.is_active else 'скрыт 🔴'}")
+
+
+async def _show_plan(message: Message, plan: Plan) -> None:
+    await message.answer(_plan_summary(plan), reply_markup=_plan_edit_kb(plan))
+
+
+def _admin_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📆 Тарифы", callback_data="adm:plans")],
+        [InlineKeyboardButton(text="🔔 Уведомления", callback_data="adm:reminders")],
+    ])
+
+
+@router.message(Command("admin"))
+async def cmd_admin(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("🛠 <b>Админка</b>\nВыберите раздел:", reply_markup=_admin_menu_kb())
+
+
+@router.callback_query(F.data == "adm:menu")
+async def cb_admin_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer()
+    await callback.message.answer("🛠 <b>Админка</b>\nВыберите раздел:",
+                                  reply_markup=_admin_menu_kb())
+
+
+@router.callback_query(F.data == "adm:plans")
+async def cb_admin_plans(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer()
+    await _show_plans_list(callback.message)
+
+
+@router.callback_query(F.data == "adm:list")
+async def cb_admin_list(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer()
+    await _show_plans_list(callback.message)
+
+
+async def _show_plans_list(message: Message) -> None:
+    plans = await crud.list_all_plans()
+    if not plans:
+        await message.answer("Тарифов пока нет.")
+        return
+    await message.answer("📆 <b>Тарифы</b>\nВыберите тариф для редактирования:",
+                         reply_markup=_plans_list_kb(plans))
+
+
+@router.callback_query(F.data.startswith("adm:plan:"))
+async def cb_admin_plan(callback: CallbackQuery) -> None:
+    plan_id = int(callback.data.rsplit(":", 1)[1])
+    plan = await crud.get_plan(plan_id)
+    await callback.answer()
+    if plan:
+        await _show_plan(callback.message, plan)
+
+
+@router.callback_query(F.data.startswith("adm:toggle:"))
+async def cb_admin_toggle(callback: CallbackQuery) -> None:
+    plan_id = int(callback.data.rsplit(":", 1)[1])
+    plan = await crud.get_plan(plan_id)
+    if plan:
+        plan = await crud.update_plan(plan_id, is_active=not plan.is_active)
+        await callback.answer("Статус изменён")
+        await _show_plan(callback.message, plan)
+    else:
+        await callback.answer()
+
+
+_FIELD_PROMPTS = {
+    "price": ("price", AdminEditPlan.price, "Введите новую цену в основной валюте (например, 39 или 39.90):"),
+    "days": ("days", AdminEditPlan.days, "Введите срок подписки в днях (целое число):"),
+    "title": ("title", AdminEditPlan.title, "Введите название тарифа (RU):"),
+    "desc": ("desc", AdminEditPlan.description, "Введите описание тарифа (RU):"),
+    "image": ("image", AdminEditPlan.image, "Отправьте фото тарифа одним изображением:"),
+}
+
+
+@router.callback_query(F.data.startswith("adm:edit:"))
+async def cb_admin_edit(callback: CallbackQuery, state: FSMContext) -> None:
+    _, _, field, plan_id = callback.data.split(":")
+    if field not in _FIELD_PROMPTS:
+        await callback.answer()
+        return
+    _, fsm_state, prompt = _FIELD_PROMPTS[field]
+    await state.set_state(fsm_state)
+    await state.update_data(plan_id=int(plan_id))
+    await callback.answer()
+    await callback.message.answer(prompt)
+
+
+async def _finish_edit(message: Message, state: FSMContext, **fields) -> None:
+    data = await state.get_data()
+    plan_id = int(data.get("plan_id", 0))
+    await state.clear()
+    plan = await crud.update_plan(plan_id, **fields)
+    if plan:
+        await message.answer("✅ Сохранено.")
+        await _show_plan(message, plan)
+
+
+@router.message(AdminEditPlan.price, F.text)
+async def edit_price(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").replace(",", ".").strip()
+    try:
+        minor = int(round(float(raw) * 100))
+        if minor < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("❌ Неверная цена. Пример: 39 или 39.90")
+        return
+    await _finish_edit(message, state, price=minor)
+
+
+@router.message(AdminEditPlan.days, F.text)
+async def edit_days(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    if not raw.isdigit() or int(raw) <= 0:
+        await message.answer("❌ Введите положительное целое число дней.")
+        return
+    await _finish_edit(message, state, duration_days=int(raw))
+
+
+@router.message(AdminEditPlan.title, F.text)
+async def edit_title(message: Message, state: FSMContext) -> None:
+    await _finish_edit(message, state, title_ru=(message.text or "").strip())
+
+
+@router.message(AdminEditPlan.description, F.text)
+async def edit_description(message: Message, state: FSMContext) -> None:
+    await _finish_edit(message, state, description_ru=(message.text or "").strip())
+
+
+@router.message(AdminEditPlan.image, F.photo)
+async def edit_image(message: Message, state: FSMContext) -> None:
+    file_id = message.photo[-1].file_id
+    await _finish_edit(message, state, image_file_id=file_id)
+
+
+@router.message(AdminEditPlan.image)
+async def edit_image_invalid(message: Message) -> None:
+    await message.answer("❌ Пришлите именно фото (изображение).")
+
+
+# ==================== Раздел «Уведомления» ====================
+
+def _reminders_kb(rules: list[ReminderRule]) -> InlineKeyboardMarkup:
+    rows = []
+    for r in rules:
+        mark = "🟢" if r.is_active else "🔴"
+        rows.append([
+            InlineKeyboardButton(text=f"{mark} за {r.days_before} дн.",
+                                 callback_data=f"adm:rem:toggle:{r.id}"),
+            InlineKeyboardButton(text="✏️ текст", callback_data=f"adm:rem:text:{r.id}"),
+            InlineKeyboardButton(text="🗑", callback_data=f"adm:rem:del:{r.id}"),
+        ])
+    rows.append([InlineKeyboardButton(text="➕ Добавить порог", callback_data="adm:rem:add")])
+    rows.append([InlineKeyboardButton(text="← В меню", callback_data="adm:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _show_reminders(message: Message) -> None:
+    rules = await crud.list_reminder_rules()
+    header = ("🔔 <b>Уведомления об окончании подписки</b>\n\n"
+              "Пороги — за сколько дней до конца слать уведомление. Можно несколько.\n"
+              "🟢 — активен, 🔴 — выключен. В тексте доступны {days} и {date}.")
+    if not rules:
+        header += "\n\n<i>Порогов пока нет.</i>"
+    await message.answer(header, reply_markup=_reminders_kb(rules))
+
+
+@router.callback_query(F.data == "adm:reminders")
+async def cb_reminders(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer()
+    await _show_reminders(callback.message)
+
+
+@router.callback_query(F.data.startswith("adm:rem:toggle:"))
+async def cb_rem_toggle(callback: CallbackQuery) -> None:
+    rule_id = int(callback.data.rsplit(":", 1)[1])
+    rule = await crud.get_reminder_rule(rule_id)
+    if rule:
+        await crud.update_reminder_rule(rule_id, is_active=not rule.is_active)
+        await callback.answer("Статус изменён")
+    else:
+        await callback.answer()
+    await _show_reminders(callback.message)
+
+
+@router.callback_query(F.data.startswith("adm:rem:del:"))
+async def cb_rem_del(callback: CallbackQuery) -> None:
+    rule_id = int(callback.data.rsplit(":", 1)[1])
+    await crud.delete_reminder_rule(rule_id)
+    await callback.answer("Порог удалён")
+    await _show_reminders(callback.message)
+
+
+@router.callback_query(F.data.startswith("adm:rem:text:"))
+async def cb_rem_text(callback: CallbackQuery, state: FSMContext) -> None:
+    rule_id = int(callback.data.rsplit(":", 1)[1])
+    await state.set_state(AdminReminder.edit_text)
+    await state.update_data(rule_id=rule_id)
+    await callback.answer()
+    await callback.message.answer(
+        "Пришлите новый текст уведомления.\n"
+        "Можно использовать {days} (дней до конца) и {date} (дата окончания).")
+
+
+@router.callback_query(F.data == "adm:rem:add")
+async def cb_rem_add(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminReminder.add_days)
+    await callback.answer()
+    await callback.message.answer("За сколько дней до конца слать уведомление? "
+                                  "Введите целое число дней:")
+
+
+@router.message(AdminReminder.add_days, F.text)
+async def rem_add_days(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    if not raw.isdigit() or int(raw) <= 0:
+        await message.answer("❌ Введите положительное целое число дней.")
+        return
+    await state.update_data(days=int(raw))
+    await state.set_state(AdminReminder.add_text)
+    await message.answer("Теперь пришлите текст уведомления.\n"
+                         "Доступны подстановки {days} и {date}.")
+
+
+@router.message(AdminReminder.add_text, F.text)
+async def rem_add_text(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    days = int(data.get("days", 0))
+    await state.clear()
+    rule = await crud.add_reminder_rule(days, (message.text or "").strip())
+    if rule is None:
+        await message.answer(f"❌ Порог на {days} дн. уже существует.")
+    else:
+        await message.answer("✅ Порог добавлен.")
+    await _show_reminders(message)
+
+
+@router.message(AdminReminder.edit_text, F.text)
+async def rem_edit_text(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    rule_id = int(data.get("rule_id", 0))
+    await state.clear()
+    await crud.update_reminder_rule(rule_id, text=(message.text or "").strip())
+    await message.answer("✅ Текст обновлён.")
+    await _show_reminders(message)

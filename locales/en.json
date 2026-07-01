@@ -1,0 +1,50 @@
+{
+  "choose_language": "🌍 Choose your language:",
+  "language_saved": "Language saved: {lang}",
+
+  "welcome": "👋 Welcome!\n\nHere you can get a subscription right inside this bot.\nTap the button below to choose a plan.",
+  "btn_buy": "🛒 Buy subscription",
+
+  "menu_plans": "📆 Plans",
+  "menu_subscription": "💳 My subscription",
+  "menu_account": "👤 My account",
+  "menu_support": "🤝 Support",
+  "menu_hint": "Pick a section from the menu below 👇",
+
+  "btn_back": "← Back",
+
+  "choose_duration": "Choose a subscription period:",
+  "plan_button": "{title} | {days} days | {price} {currency}",
+  "plan_detail": "<b>{title}</b>\n\n{description}\n\n⏳ Period: {days} days\n💰 Price: {price} {currency}",
+  "plan_no_active": "No plans available yet. Please check back later.",
+
+  "choose_payment": "Choose a payment method:",
+  "pay_allpay": "💳 Pay by card (AllPay)",
+
+  "email_ask": "✉️ To complete the subscription, please provide your e-mail.\nWe'll send the receipt and payment confirmation there:",
+  "email_invalid": "❌ That doesn't look like an e-mail. Please enter a valid address:",
+  "email_saved": "✅ E-mail saved.",
+
+  "payment_created": "🧾 Invoice created.\nTap the button below to proceed to payment.",
+  "pay_open_button": "💳 Proceed to payment",
+  "payment_error": "⚠️ Could not create the invoice. Please try again later or contact support.",
+  "payment_success_notify": "✅ Payment received!\nYour subscription is active until <b>{date}</b>.",
+
+  "subscription_active": "💳 <b>Your subscription</b>\n\nPlan: {title}\nStatus: active ✅\nValid until: <b>{date}</b>",
+  "subscription_none": "You don't have an active subscription yet.\nGet one in the “Plans” section.",
+  "btn_renew": "🔄 Renew",
+
+  "account_title": "👤 <b>My account</b>",
+  "account_body": "👤 <b>My account</b>\n\n— <i>Telegram ID:</i> {tg_id}\n— <i>Language:</i> {lang}\n— <i>Timezone:</i> {tz}\n— <i>E-mail:</i> {email}\n\nHere you can manage and configure your account:",
+  "account_email_none": "None",
+  "btn_account_lang": "🌐 Language",
+  "btn_account_tz": "🕒 Timezone",
+  "btn_account_email": "✉️ E-mail",
+  "account_email_ask": "Enter a new e-mail:",
+  "account_email_updated": "✅ E-mail updated.",
+  "account_tz_ask": "Send your timezone as UTC±HH (e.g. UTC+3):",
+  "account_tz_invalid": "❌ Invalid format. Example: UTC+3 or UTC-5",
+  "account_tz_updated": "✅ Timezone updated: {tz}",
+
+  "support_text": "🤝 <b>Support</b>\n\nGot questions? Message our administrator:\n{contact}"
+}
