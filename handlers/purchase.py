@@ -43,7 +43,7 @@ async def cb_buy_list(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("buy:pick:"))
 async def cb_buy_pick(callback: CallbackQuery) -> None:
-    _, lang = await get_user_and_lang(callback.from_user.id)
+    user, lang = await get_user_and_lang(callback.from_user.id)
     plan_id = int(callback.data.rsplit(":", 1)[1])
     plan = await crud.get_plan(plan_id)
     await callback.answer()
@@ -54,11 +54,26 @@ async def cb_buy_pick(callback: CallbackQuery) -> None:
     text = t("plan_detail", lang, title=plan.title(lang), description=plan.description(lang),
              days=plan.duration_days, price=plan.price_display(), currency=plan.currency)
     text += "\n\n" + t("choose_payment", lang)
-    kb = payment_methods_kb(plan.id, lang)
+    kb = payment_methods_kb(plan.id, lang, user.auto_renew)
     if plan.image_file_id:
         await callback.message.answer_photo(plan.image_file_id, caption=text, reply_markup=kb)
     else:
         await callback.message.answer(text, reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("auto:pick:"))
+async def cb_auto_toggle_pick(callback: CallbackQuery) -> None:
+    """Переключатель автопродления на экране оплаты — меняет только клавиатуру."""
+    user, lang = await get_user_and_lang(callback.from_user.id)
+    plan_id = int(callback.data.rsplit(":", 1)[1])
+    new_value = not user.auto_renew
+    await crud.set_auto_renew(callback.from_user.id, new_value)
+    await callback.answer(t("auto_on" if new_value else "auto_off", lang))
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=payment_methods_kb(plan_id, lang, new_value))
+    except Exception:  # noqa: BLE001
+        pass
 
 
 # ---------- Шаг 3: способ оплаты → проверка e-mail ----------

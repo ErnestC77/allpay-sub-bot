@@ -32,6 +32,13 @@
   "channel_access": "🔓 Access to the private channel is open!\nTap the button below to join (single-use link).",
   "channel_join_button": "🚪 Join the channel",
   "subscription_expired": "⌛ Your subscription has ended, access to the private channel is paused.\nRenew to come back.",
+  "auto_on": "☑️ Auto-renewal",
+  "auto_off": "◻️ Auto-renewal",
+  "auto_renew_ok": "🔁 Auto-renewal done!\nSubscription active until <b>{date}</b>.",
+  "auto_renew_note": "\n\n🔁 Auto-renewal: <b>{state}</b>{card}",
+  "auto_state_on": "on",
+  "auto_state_off": "off",
+  "auto_card": " · card {mask}",
 
   "subscription_active": "💳 <b>Your subscription</b>\n\nPlan: {title}\nStatus: active ✅\nValid until: <b>{date}</b>",
   "subscription_none": "You don't have an active subscription yet.\nGet one in the “Plans” section.",

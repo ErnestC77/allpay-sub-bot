@@ -34,9 +34,11 @@ def durations_kb(plans: list[Plan], lang: str, back_cb: str | None = "nav:close"
     return builder.as_markup()
 
 
-def payment_methods_kb(plan_id: int, lang: str) -> InlineKeyboardMarkup:
-    """Выбор способа оплаты для конкретного тарифа."""
+def payment_methods_kb(plan_id: int, lang: str, auto_renew: bool = False) -> InlineKeyboardMarkup:
+    """Выбор способа оплаты + переключатель автопродления."""
+    toggle = t("auto_on" if auto_renew else "auto_off", lang)
     return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=toggle, callback_data=f"auto:pick:{plan_id}")],
         [InlineKeyboardButton(text=t("pay_allpay", lang),
                               callback_data=f"pay:allpay:{plan_id}")],
         [InlineKeyboardButton(text=t("btn_back", lang), callback_data="buy:list")],
@@ -69,13 +71,15 @@ def plan_view_kb(plan_id: int, lang: str) -> InlineKeyboardMarkup:
     ])
 
 
-def subscription_kb(lang: str, has_sub: bool) -> InlineKeyboardMarkup:
-    """Есть подписка → «Продлить», нет → «Купить». Плюс «Назад»."""
+def subscription_kb(lang: str, has_sub: bool, auto_renew: bool = False) -> InlineKeyboardMarkup:
+    """Есть подписка → «Продлить» + переключатель автопродления, нет → «Купить». Плюс «Назад»."""
     action = t("btn_renew", lang) if has_sub else t("btn_buy", lang)
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=action, callback_data="buy:list")],
-        [InlineKeyboardButton(text=t("btn_back", lang), callback_data="nav:close")],
-    ])
+    rows = [[InlineKeyboardButton(text=action, callback_data="buy:list")]]
+    if has_sub:
+        toggle = t("auto_on" if auto_renew else "auto_off", lang)
+        rows.append([InlineKeyboardButton(text=toggle, callback_data="auto:sub")])
+    rows.append([InlineKeyboardButton(text=t("btn_back", lang), callback_data="nav:close")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def account_kb(lang: str) -> InlineKeyboardMarkup:

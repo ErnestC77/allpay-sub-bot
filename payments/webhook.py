@@ -10,7 +10,7 @@ from aiohttp import web
 from config import Config
 from db import crud
 from i18n import normalize_lang, t
-from payments.allpay import verify_webhook_sign
+from payments.allpay import get_token, verify_webhook_sign
 from utils import format_dt
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,19 @@ def make_webhook_handler(bot: Bot, config: Config):
             )
         except Exception:  # noqa: BLE001
             logger.exception("Не удалось уведомить пользователя об оплате, order_id=%s", order_id)
+
+        # Запоминаем тариф и сохраняем токен карты для автопродления.
+        if subscription.plan_id:
+            await crud.set_last_plan(subscription.user_id, subscription.plan_id)
+        try:
+            if config.allpay_login and config.allpay_key:
+                token, mask = await get_token(
+                    login=config.allpay_login, api_key=config.allpay_key, order_id=order_id)
+                if token:
+                    await crud.save_card_token(
+                        subscription.user_id, token, mask, subscription.plan_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("Не удалось получить токен карты, order_id=%s", order_id)
 
         # Выдаём одноразовую ссылку в закрытый канал.
         await _send_channel_invite(bot, config, subscription.user_id)

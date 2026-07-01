@@ -25,6 +25,12 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
+    # Автопродление по токену карты AllPay
+    auto_renew: Mapped[bool] = mapped_column(Boolean, default=False)
+    allpay_token: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    card_mask: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_plan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user")
 
 

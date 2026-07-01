@@ -177,36 +177,59 @@ async def mark_paid_and_activate(order_id: str, allpay_ref: str | None) -> Subsc
         return subscription
 
 
-async def expire_due_subscriptions() -> list[int]:
-    """Помечает истёкшие подписки как expired.
-
-    Возвращает список user_id, у кого после этого НЕ осталось активной подписки —
-    их нужно удалить из закрытого канала.
-    """
+async def get_due_subscriptions() -> list[Subscription]:
+    """Активные подписки, срок которых истёк (end_at <= now) — к обработке."""
     now = utcnow()
     async with get_sessionmaker()() as session:
-        due = list(await session.scalars(
+        return list(await session.scalars(
             select(Subscription).where(
                 Subscription.status == "active",
                 Subscription.end_at <= now,
             )
         ))
-        for sub in due:
-            sub.status = "expired"
-        await session.commit()
 
-        to_remove: list[int] = []
-        for uid in {s.user_id for s in due}:
-            still_active = await session.scalar(
-                select(Subscription).where(
-                    Subscription.user_id == uid,
-                    Subscription.status == "active",
-                    Subscription.end_at > now,
-                ).limit(1)
-            )
-            if still_active is None:
-                to_remove.append(uid)
-        return to_remove
+
+async def set_subscription_status(sub_id: int, status: str) -> None:
+    async with get_sessionmaker()() as session:
+        sub = await session.get(Subscription, sub_id)
+        if sub:
+            sub.status = status
+            await session.commit()
+
+
+async def has_active_subscription(user_id: int) -> bool:
+    return await get_active_subscription(user_id) is not None
+
+
+# ---------- Автопродление / токен карты ----------
+
+async def set_auto_renew(tg_id: int, value: bool) -> None:
+    async with get_sessionmaker()() as session:
+        user = await session.get(User, tg_id)
+        if user:
+            user.auto_renew = value
+            await session.commit()
+
+
+async def save_card_token(tg_id: int, token: str, card_mask: str | None,
+                          last_plan_id: int | None) -> None:
+    async with get_sessionmaker()() as session:
+        user = await session.get(User, tg_id)
+        if user:
+            user.allpay_token = token
+            if card_mask:
+                user.card_mask = card_mask
+            if last_plan_id:
+                user.last_plan_id = last_plan_id
+            await session.commit()
+
+
+async def set_last_plan(tg_id: int, plan_id: int) -> None:
+    async with get_sessionmaker()() as session:
+        user = await session.get(User, tg_id)
+        if user:
+            user.last_plan_id = plan_id
+            await session.commit()
 
 
 # ---------- Напоминания об окончании подписки ----------

@@ -140,3 +140,42 @@ async def create_payment(
     if not url:
         raise RuntimeError(f"AllPay не вернул ссылку на оплату: {body}")
     return url
+
+
+def _api_url(show: str) -> str:
+    return f"https://allpay.to/app/?show={show}&mode=api11"
+
+
+async def _post(show: str, payload: dict[str, Any], api_key: str) -> dict[str, Any]:
+    payload["sign"] = build_sign(payload, api_key)
+    async with aiohttp.ClientSession() as session:
+        async with session.post(_api_url(show), json=payload,
+                                timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            resp.raise_for_status()
+            return await resp.json(content_type=None)
+
+
+async def get_token(*, login: str, api_key: str, order_id: str) -> tuple[str | None, str | None]:
+    """Возвращает (allpay_token, card_mask) для завершённого платежа по order_id."""
+    body = await _post("gettoken", {"login": login, "order_id": order_id}, api_key)
+    if isinstance(body, dict) and body.get("allpay_token"):
+        return str(body["allpay_token"]), (str(body["card_mask"]) if body.get("card_mask") else None)
+    return None, None
+
+
+async def charge_token(
+    *, login: str, api_key: str, order_id: str, amount_major: float,
+    currency: str, item_name: str, allpay_token: str,
+) -> bool:
+    """Списывает по сохранённому токену без участия пользователя. True при status=1."""
+    payload: dict[str, Any] = {
+        "login": login,
+        "order_id": order_id,
+        "currency": currency,
+        "allpay_token": allpay_token,
+        "items": [
+            {"name": item_name, "price": f"{amount_major:.2f}", "qty": "1", "vat": "0"},
+        ],
+    }
+    body = await _post("getpayment", payload, api_key)
+    return isinstance(body, dict) and str(body.get("status")) == "1"

@@ -61,9 +61,7 @@ async def main() -> None:
     logger.info("Webhook-сервер AllPay слушает порт %s (%s)", config.port, config.allpay_webhook_url)
 
     # Фоновая рассылка уведомлений об окончании подписки.
-    reminder_task = asyncio.create_task(
-        reminder_worker(bot, config.reminder_check_interval, config.channel_chat_id)
-    )
+    reminder_task = asyncio.create_task(reminder_worker(bot, config))
 
     try:
         await bot.delete_webhook(drop_pending_updates=True)

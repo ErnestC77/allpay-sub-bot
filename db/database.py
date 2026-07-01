@@ -33,11 +33,30 @@ _DEFAULT_PLANS = [
 ]
 
 
+# Лёгкие миграции для уже существующих таблиц (Postgres). На свежей SQLite колонки
+# создаёт create_all, а эти ALTER просто молча отваливаются (обёрнуты в try).
+_MIGRATIONS = [
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_renew BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS allpay_token VARCHAR(128)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS card_mask VARCHAR(32)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_plan_id INTEGER",
+]
+
+
 async def init_db(default_currency: str = "ILS") -> None:
-    """Создаёт таблицы и наполняет тарифы по умолчанию, если их ещё нет."""
+    """Создаёт таблицы, применяет миграции и наполняет данные по умолчанию."""
     assert _engine is not None
+    from sqlalchemy import text
+
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    for stmt in _MIGRATIONS:
+        try:
+            async with _engine.begin() as conn:
+                await conn.execute(text(stmt))
+        except Exception:  # noqa: BLE001 — колонка уже есть или SQLite-синтаксис
+            pass
 
     from sqlalchemy import select
 
