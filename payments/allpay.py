@@ -90,8 +90,10 @@ async def create_payment(
         "client_email": client_email,
         "webhook_url": webhook_url,
         "success_url": success_url,
+        # AllPay считает подпись от строковых значений — price/qty/vat ОБЯЗАТЕЛЬНО
+        # передавать строками, иначе JSON пошлёт число и подпись не сойдётся.
         "items": [
-            {"name": item_name, "price": amount_major, "qty": 1, "vat": 0},
+            {"name": item_name, "price": f"{amount_major:.2f}", "qty": "1", "vat": "0"},
         ],
     }
     payload["sign"] = build_sign(payload, api_key)
