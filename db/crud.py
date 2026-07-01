@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from db.database import get_sessionmaker
-from db.models import (Payment, Plan, ReminderLog, ReminderRule, Subscription,
-                       User, utcnow)
+from db.models import (Admin, Payment, Plan, ReminderLog, ReminderRule,
+                       Subscription, User, utcnow)
 
 
 # ---------- Пользователи ----------
@@ -199,6 +199,38 @@ async def set_subscription_status(sub_id: int, status: str) -> None:
 
 async def has_active_subscription(user_id: int) -> bool:
     return await get_active_subscription(user_id) is not None
+
+
+# ---------- Администраторы (динамические) ----------
+
+async def list_admin_ids() -> list[int]:
+    async with get_sessionmaker()() as session:
+        return list(await session.scalars(select(Admin.tg_id).order_by(Admin.created_at)))
+
+
+async def is_admin_db(tg_id: int) -> bool:
+    async with get_sessionmaker()() as session:
+        return await session.get(Admin, tg_id) is not None
+
+
+async def add_admin(tg_id: int) -> bool:
+    """Добавляет админа. False, если уже был."""
+    async with get_sessionmaker()() as session:
+        if await session.get(Admin, tg_id) is not None:
+            return False
+        session.add(Admin(tg_id=tg_id))
+        await session.commit()
+        return True
+
+
+async def remove_admin(tg_id: int) -> bool:
+    async with get_sessionmaker()() as session:
+        admin = await session.get(Admin, tg_id)
+        if admin is None:
+            return False
+        await session.delete(admin)
+        await session.commit()
+        return True
 
 
 # ---------- Автопродление / токен карты ----------

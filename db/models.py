@@ -104,6 +104,14 @@ class Payment(Base):
     plan: Mapped["Plan | None"] = relationship()
 
 
+class Admin(Base):
+    """Динамические администраторы (в дополнение к ADMIN_IDS из настроек)."""
+    __tablename__ = "admins"
+
+    tg_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ReminderRule(Base):
     """Порог уведомления об окончании подписки (за N дней до конца).
 

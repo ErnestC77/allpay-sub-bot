@@ -18,7 +18,7 @@ from db import crud
 from db.models import Plan, ReminderRule
 from i18n import normalize_lang, t
 from keyboards.reply import main_menu
-from states import AdminEditPlan, AdminImport, AdminReminder
+from states import AdminEditPlan, AdminImport, AdminManage, AdminReminder
 from utils import format_dt, parse_admin_datetime
 
 logger = logging.getLogger("admin")
@@ -27,7 +27,12 @@ router = Router()
 
 class IsAdmin(BaseFilter):
     async def __call__(self, event: Message | CallbackQuery, config: Config) -> bool:
-        return bool(event.from_user) and event.from_user.id in config.admin_ids
+        if not event.from_user:
+            return False
+        uid = event.from_user.id
+        if uid in config.admin_ids:   # супер-админы из настроек
+            return True
+        return await crud.is_admin_db(uid)
 
 
 # Ограничиваем весь роутер администраторами.
@@ -79,6 +84,7 @@ def _admin_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📆 Тарифы", callback_data="adm:plans")],
         [InlineKeyboardButton(text="🔔 Уведомления", callback_data="adm:reminders")],
         [InlineKeyboardButton(text="👥 Импорт подписчиков", callback_data="adm:import")],
+        [InlineKeyboardButton(text="👮 Админы", callback_data="adm:admins")],
     ])
 
 
@@ -388,3 +394,65 @@ async def import_ids(message: Message, state: FSMContext) -> None:
     if failed_notify:
         report += "\n<code>" + " ".join(str(x) for x in failed_notify[:100]) + "</code>"
     await message.answer(report)
+
+
+# ==================== Управление админами ====================
+
+def _admins_kb(db_ids: list[int]) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=f"🗑 Удалить {i}", callback_data=f"adm:admdel:{i}")]
+            for i in db_ids]
+    rows.append([InlineKeyboardButton(text="➕ Добавить админа", callback_data="adm:admadd")])
+    rows.append([InlineKeyboardButton(text="← В меню", callback_data="adm:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _show_admins(message: Message, config: Config) -> None:
+    db_ids = await crud.list_admin_ids()
+    env_ids = sorted(config.admin_ids)
+    text = "👮 <b>Администраторы</b>\n\n<b>Из настроек</b> (несменяемые):\n"
+    text += ("\n".join(f"• <code>{i}</code>" for i in env_ids) or "—")
+    text += "\n\n<b>Добавленные</b>:\n"
+    text += ("\n".join(f"• <code>{i}</code>" for i in db_ids) or "—")
+    await message.answer(text, reply_markup=_admins_kb(db_ids))
+
+
+@router.callback_query(F.data == "adm:admins")
+async def cb_admins(callback: CallbackQuery, state: FSMContext, config: Config) -> None:
+    await state.clear()
+    await callback.answer()
+    await _show_admins(callback.message, config)
+
+
+@router.callback_query(F.data == "adm:admadd")
+async def cb_admin_add(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminManage.add_admin)
+    await callback.answer()
+    await callback.message.answer(
+        "Пришлите Telegram ID нового администратора (число).\n"
+        "ID можно узнать, например, через @userinfobot.")
+
+
+@router.message(AdminManage.add_admin, F.text)
+async def admin_add_id(message: Message, state: FSMContext, config: Config) -> None:
+    await state.clear()
+    raw = (message.text or "").strip()
+    if not raw.lstrip("-").isdigit():
+        await message.answer("❌ Нужно число (Telegram ID). Начните заново: /admin")
+        return
+    uid = int(raw)
+    added = await crud.add_admin(uid)
+    if uid in config.admin_ids:
+        await message.answer("ℹ️ Этот ID уже админ из настроек.")
+    elif added:
+        await message.answer(f"✅ Админ <code>{uid}</code> добавлен.")
+    else:
+        await message.answer("ℹ️ Этот ID уже был админом.")
+    await _show_admins(message, config)
+
+
+@router.callback_query(F.data.startswith("adm:admdel:"))
+async def cb_admin_del(callback: CallbackQuery, config: Config) -> None:
+    uid = int(callback.data.rsplit(":", 1)[1])
+    await crud.remove_admin(uid)
+    await callback.answer("Удалён")
+    await _show_admins(callback.message, config)

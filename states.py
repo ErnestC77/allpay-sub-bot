@@ -33,3 +33,7 @@ class AdminReminder(StatesGroup):
 class AdminImport(StatesGroup):
     end_date = State()   # ждём дату/время окончания для партии
     ids = State()        # ждём список Telegram ID
+
+
+class AdminManage(StatesGroup):
+    add_admin = State()  # ждём Telegram ID нового админа
