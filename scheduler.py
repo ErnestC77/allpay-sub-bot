@@ -35,15 +35,21 @@ async def process_due_reminders(bot: Bot) -> int:
     """Один проход: рассылает все назревшие уведомления. Возвращает число отправленных."""
     sent = 0
     for sub, rule in await crud.due_reminders():
+        # «После окончания» (отрицательный порог) не шлём тем, кто уже продлил.
+        if rule.days_before < 0 and await crud.has_active_subscription(sub.user_id):
+            await crud.log_reminder(sub.id, rule.days_before)
+            continue
         # Сначала «занимаем» отправку (защита от дублей), затем шлём.
         if not await crud.log_reminder(sub.id, rule.days_before):
             continue
         try:
             user = await crud.get_or_create_user(sub.user_id)
             lang = normalize_lang(user.language)
-            text = _render(rule.text, rule.days_before, format_dt(sub.end_at, user.timezone))
+            text = _render(rule.text, abs(rule.days_before), format_dt(sub.end_at, user.timezone))
+            # до/в день окончания → «Продлить»; после окончания → «Купить»
+            has_sub = rule.days_before >= 0
             await bot.send_message(sub.user_id, text,
-                                   reply_markup=subscription_kb(lang, has_sub=True))
+                                   reply_markup=subscription_kb(lang, has_sub=has_sub))
             sent += 1
         except Exception:  # noqa: BLE001
             logger.exception("Не удалось отправить напоминание user=%s rule=%sд",

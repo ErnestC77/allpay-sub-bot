@@ -223,12 +223,20 @@ async def edit_image_invalid(message: Message) -> None:
 
 # ==================== Раздел «Уведомления» ====================
 
+def _rule_label(days: int) -> str:
+    if days > 0:
+        return f"за {days} дн. до"
+    if days == 0:
+        return "в день окончания"
+    return f"через {abs(days)} дн. после"
+
+
 def _reminders_kb(rules: list[ReminderRule]) -> InlineKeyboardMarkup:
     rows = []
     for r in rules:
         mark = "🟢" if r.is_active else "🔴"
         rows.append([
-            InlineKeyboardButton(text=f"{mark} за {r.days_before} дн.",
+            InlineKeyboardButton(text=f"{mark} {_rule_label(r.days_before)}",
                                  callback_data=f"adm:rem:toggle:{r.id}"),
             InlineKeyboardButton(text="✏️ текст", callback_data=f"adm:rem:text:{r.id}"),
             InlineKeyboardButton(text="🗑", callback_data=f"adm:rem:del:{r.id}"),
@@ -241,7 +249,10 @@ def _reminders_kb(rules: list[ReminderRule]) -> InlineKeyboardMarkup:
 async def _show_reminders(message: Message) -> None:
     rules = await crud.list_reminder_rules()
     header = ("🔔 <b>Уведомления об окончании подписки</b>\n\n"
-              "Пороги — за сколько дней до конца слать уведомление. Можно несколько.\n"
+              "Пороги (можно несколько):\n"
+              "• <b>положительное</b> число — за N дней ДО окончания;\n"
+              "• <b>0</b> — в день окончания;\n"
+              "• <b>отрицательное</b> — через N дней ПОСЛЕ окончания.\n"
               "🟢 — активен, 🔴 — выключен. В тексте доступны {days} и {date}.")
     if not rules:
         header += "\n\n<i>Порогов пока нет.</i>"
@@ -290,15 +301,18 @@ async def cb_rem_text(callback: CallbackQuery, state: FSMContext) -> None:
 async def cb_rem_add(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminReminder.add_days)
     await callback.answer()
-    await callback.message.answer("За сколько дней до конца слать уведомление? "
-                                  "Введите целое число дней:")
+    await callback.message.answer(
+        "Когда слать уведомление? Введите целое число:\n"
+        "• <b>N</b> — за N дней ДО окончания (напр. 3)\n"
+        "• <b>0</b> — в день окончания\n"
+        "• <b>-N</b> — через N дней ПОСЛЕ окончания (напр. -7)")
 
 
 @router.message(AdminReminder.add_days, F.text)
 async def rem_add_days(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").strip()
-    if not raw.isdigit() or int(raw) <= 0:
-        await message.answer("❌ Введите положительное целое число дней.")
+    if not (raw.lstrip("-").isdigit()) or abs(int(raw)) > 3650:
+        await message.answer("❌ Введите целое число (например 3, 0 или -7).")
         return
     await state.update_data(days=int(raw))
     await state.set_state(AdminReminder.add_text)

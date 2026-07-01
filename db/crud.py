@@ -334,19 +334,25 @@ async def delete_reminder_rule(rule_id: int) -> bool:
 async def due_reminders() -> list[tuple[Subscription, ReminderRule]]:
     """Возвращает пары (подписка, порог), по которым пора отправить уведомление.
 
-    Условие для порога N дней: подписка активна, ещё не истекла, до конца осталось
-    не больше N дней, и по этой паре (подписка, N) уведомление ещё не отправлялось.
+    Порог days_before = смещение относительно конца подписки:
+      • > 0  — за N дней ДО окончания;
+      • = 0  — в день окончания;
+      • < 0  — через |N| дней ПОСЛЕ окончания.
+    Момент срабатывания = end_at - days_before. Отправляем один раз на (подписку, порог)
+    в пределах окна догона (2 дня), чтобы не спамить старые подписки и переживать простои.
     """
     from datetime import timedelta
 
     now = utcnow()
+    window = timedelta(days=2)
     result: list[tuple[Subscription, ReminderRule]] = []
     async with get_sessionmaker()() as session:
         rules = list(await session.scalars(
             select(ReminderRule).where(ReminderRule.is_active.is_(True))
         ))
         for rule in rules:
-            threshold = now + timedelta(days=rule.days_before)
+            hi = now + timedelta(days=rule.days_before)   # момент срабатывания достигнут
+            lo = hi - window                              # ещё в окне догона
             sent_subq = (
                 select(ReminderLog.subscription_id)
                 .where(ReminderLog.days_before == rule.days_before)
@@ -354,9 +360,9 @@ async def due_reminders() -> list[tuple[Subscription, ReminderRule]]:
             )
             subs = await session.scalars(
                 select(Subscription).where(
-                    Subscription.status == "active",
-                    Subscription.end_at > now,
-                    Subscription.end_at <= threshold,
+                    Subscription.status.in_(("active", "expired")),
+                    Subscription.end_at > lo,
+                    Subscription.end_at <= hi,
                     Subscription.id.notin_(sent_subq),
                 )
             )
