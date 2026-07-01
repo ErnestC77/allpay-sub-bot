@@ -29,6 +29,9 @@
   "pay_open_button": "💳 Proceed to payment",
   "payment_error": "⚠️ Could not create the invoice. Please try again later or contact support.",
   "payment_success_notify": "✅ Payment received!\nYour subscription is active until <b>{date}</b>.",
+  "channel_access": "🔓 Access to the private channel is open!\nTap the button below to join (single-use link).",
+  "channel_join_button": "🚪 Join the channel",
+  "subscription_expired": "⌛ Your subscription has ended, access to the private channel is paused.\nRenew to come back.",
 
   "subscription_active": "💳 <b>Your subscription</b>\n\nPlan: {title}\nStatus: active ✅\nValid until: <b>{date}</b>",
   "subscription_none": "You don't have an active subscription yet.\nGet one in the “Plans” section.",

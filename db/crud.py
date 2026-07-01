@@ -177,6 +177,38 @@ async def mark_paid_and_activate(order_id: str, allpay_ref: str | None) -> Subsc
         return subscription
 
 
+async def expire_due_subscriptions() -> list[int]:
+    """Помечает истёкшие подписки как expired.
+
+    Возвращает список user_id, у кого после этого НЕ осталось активной подписки —
+    их нужно удалить из закрытого канала.
+    """
+    now = utcnow()
+    async with get_sessionmaker()() as session:
+        due = list(await session.scalars(
+            select(Subscription).where(
+                Subscription.status == "active",
+                Subscription.end_at <= now,
+            )
+        ))
+        for sub in due:
+            sub.status = "expired"
+        await session.commit()
+
+        to_remove: list[int] = []
+        for uid in {s.user_id for s in due}:
+            still_active = await session.scalar(
+                select(Subscription).where(
+                    Subscription.user_id == uid,
+                    Subscription.status == "active",
+                    Subscription.end_at > now,
+                ).limit(1)
+            )
+            if still_active is None:
+                to_remove.append(uid)
+        return to_remove
+
+
 # ---------- Напоминания об окончании подписки ----------
 
 async def list_reminder_rules(active_only: bool = False) -> list[ReminderRule]:

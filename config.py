@@ -31,6 +31,17 @@ class Config:
     database_url: str
     default_currency: str
     reminder_check_interval: int
+    channel_id: str  # ID закрытого канала (например -1001234567890) или @username; пусто = выкл
+
+    @property
+    def channel_chat_id(self) -> int | str | None:
+        """chat_id для Telegram API: int для числового ID, иначе строка/None."""
+        cid = self.channel_id.strip()
+        if not cid:
+            return None
+        if cid.lstrip("-").isdigit():
+            return int(cid)
+        return cid
 
     # Путь webhook AllPay внутри aiohttp-приложения
     allpay_webhook_path: str = "/allpay/webhook"
@@ -71,4 +82,5 @@ def load_config() -> Config:
         database_url=database_url,
         default_currency=os.getenv("DEFAULT_CURRENCY", "ILS").strip().upper(),
         reminder_check_interval=int(os.getenv("REMINDER_CHECK_INTERVAL", "3600")),
+        channel_id=os.getenv("CHANNEL_ID", "").strip(),
     )

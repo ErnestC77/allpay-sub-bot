@@ -11,7 +11,8 @@ from aiohttp import web
 
 from config import load_config
 from db.database import init_db, init_engine
-from handlers import account, admin, menu, plans, purchase, start, subscription, support
+from handlers import (account, admin, chatinfo, menu, plans, purchase, start,
+                      subscription, support)
 from payments.webhook import setup_routes
 from scheduler import reminder_worker
 
@@ -26,6 +27,7 @@ def build_dispatcher(config) -> Dispatcher:
     dp = Dispatcher()
     dp["config"] = config
     # Порядок важен: команды и FSM-роутеры раньше, общий текстовый обработчик меню — последним.
+    dp.include_router(chatinfo.router)
     dp.include_router(start.router)
     dp.include_router(admin.router)
     dp.include_router(purchase.router)
@@ -60,7 +62,7 @@ async def main() -> None:
 
     # Фоновая рассылка уведомлений об окончании подписки.
     reminder_task = asyncio.create_task(
-        reminder_worker(bot, config.reminder_check_interval)
+        reminder_worker(bot, config.reminder_check_interval, config.channel_chat_id)
     )
 
     try:

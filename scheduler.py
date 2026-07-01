@@ -13,7 +13,7 @@ import logging
 from aiogram import Bot
 
 from db import crud
-from i18n import normalize_lang
+from i18n import normalize_lang, t
 from keyboards.inline import subscription_kb
 from utils import format_dt
 
@@ -39,7 +39,8 @@ async def process_due_reminders(bot: Bot) -> int:
             user = await crud.get_or_create_user(sub.user_id)
             lang = normalize_lang(user.language)
             text = _render(rule.text, rule.days_before, format_dt(sub.end_at, user.timezone))
-            await bot.send_message(sub.user_id, text, reply_markup=subscription_kb(lang))
+            await bot.send_message(sub.user_id, text,
+                                   reply_markup=subscription_kb(lang, has_sub=True))
             sent += 1
         except Exception:  # noqa: BLE001
             logger.exception("Не удалось отправить напоминание user=%s rule=%sд",
@@ -49,12 +50,40 @@ async def process_due_reminders(bot: Bot) -> int:
     return sent
 
 
-async def reminder_worker(bot: Bot, interval_seconds: int) -> None:
-    """Бесконечный цикл проверки. Запускается как asyncio-задача из bot.py."""
-    logger.info("Планировщик напоминаний запущен (интервал %s c)", interval_seconds)
+async def process_expired(bot: Bot, channel_id: int | str | None) -> int:
+    """Помечает истёкшие подписки и удаляет таких пользователей из закрытого канала."""
+    removed = 0
+    for uid in await crud.expire_due_subscriptions():
+        user = await crud.get_or_create_user(uid)
+        lang = normalize_lang(user.language)
+        # Уведомляем об окончании
+        try:
+            await bot.send_message(uid, t("subscription_expired", lang),
+                                   reply_markup=subscription_kb(lang, has_sub=False))
+        except Exception:  # noqa: BLE001
+            logger.exception("Не удалось уведомить об окончании подписки user=%s", uid)
+        # Удаляем из канала (ban + unban, чтобы мог вернуться после продления)
+        if channel_id:
+            try:
+                await bot.ban_chat_member(channel_id, uid)
+                await bot.unban_chat_member(channel_id, uid, only_if_banned=True)
+                removed += 1
+            except Exception:  # noqa: BLE001
+                logger.exception("Не удалось удалить из канала user=%s", uid)
+    if removed:
+        logger.info("Удалено из канала по окончании подписки: %s", removed)
+    return removed
+
+
+async def reminder_worker(bot: Bot, interval_seconds: int,
+                          channel_id: int | str | None = None) -> None:
+    """Бесконечный цикл: напоминания + снятие доступа по окончании подписки."""
+    logger.info("Планировщик запущен (интервал %s c, канал=%s)",
+                interval_seconds, channel_id or "выкл")
     while True:
         try:
             await process_due_reminders(bot)
+            await process_expired(bot, channel_id)
         except Exception:  # noqa: BLE001
-            logger.exception("Ошибка в цикле напоминаний")
+            logger.exception("Ошибка в цикле планировщика")
         await asyncio.sleep(interval_seconds)

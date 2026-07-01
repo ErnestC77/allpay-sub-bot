@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiohttp import web
 
 from config import Config
@@ -76,9 +77,30 @@ def make_webhook_handler(bot: Bot, config: Config):
         except Exception:  # noqa: BLE001
             logger.exception("Не удалось уведомить пользователя об оплате, order_id=%s", order_id)
 
+        # Выдаём одноразовую ссылку в закрытый канал.
+        await _send_channel_invite(bot, config, subscription.user_id)
+
         return web.Response(text="ok", status=200)
 
     return handler
+
+
+async def _send_channel_invite(bot: Bot, config: Config, user_id: int) -> None:
+    """Создаёт одноразовую ссылку в закрытый канал и присылает её пользователю."""
+    chat_id = config.channel_chat_id
+    if not chat_id:
+        return
+    try:
+        user = await crud.get_or_create_user(user_id)
+        lang = normalize_lang(user.language)
+        link = await bot.create_chat_invite_link(
+            chat_id, member_limit=1, name=f"sub-{user_id}"[:32],
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=t("channel_join_button", lang), url=link.invite_link)]])
+        await bot.send_message(user_id, t("channel_access", lang), reply_markup=kb)
+    except Exception:  # noqa: BLE001
+        logger.exception("Не удалось выдать ссылку в канал user=%s", user_id)
 
 
 async def _success_page(request: web.Request) -> web.Response:
