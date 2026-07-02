@@ -83,6 +83,7 @@ def _admin_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📆 Тарифы", callback_data="adm:plans")],
         [InlineKeyboardButton(text="🔔 Уведомления", callback_data="adm:reminders")],
+        [InlineKeyboardButton(text="💳 Подписчики", callback_data="adm:subs")],
         [InlineKeyboardButton(text="👥 Импорт подписчиков", callback_data="adm:import")],
         [InlineKeyboardButton(text="👮 Админы", callback_data="adm:admins")],
     ])
@@ -503,3 +504,96 @@ async def cb_admin_del(callback: CallbackQuery, config: Config) -> None:
     await crud.remove_admin(uid)
     await callback.answer("Удалён")
     await _show_admins(callback.message, config)
+
+
+# ==================== Подписчики (просмотр/удаление) ====================
+
+SUBS_PAGE = 8
+
+
+async def _show_subscribers(message: Message, page: int) -> None:
+    total = await crud.count_active_subscribers()
+    subs = await crud.list_active_subscribers(limit=SUBS_PAGE, offset=page * SUBS_PAGE)
+    rows = []
+    for s in subs:
+        u = await crud.get_or_create_user(s.user_id)
+        rows.append([InlineKeyboardButton(
+            text=f"👤 {s.user_id} · до {format_dt(s.end_at, u.timezone)[:10]}",
+            callback_data=f"adm:sub:{s.user_id}")])
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="←", callback_data=f"adm:subs:page:{page-1}"))
+    if (page + 1) * SUBS_PAGE < total:
+        nav.append(InlineKeyboardButton(text="→", callback_data=f"adm:subs:page:{page+1}"))
+    if nav:
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(text="← В меню", callback_data="adm:menu")])
+    header = f"💳 <b>Активные подписчики</b>: {total}"
+    if not subs:
+        header += "\n\n<i>Пока нет.</i>"
+    await message.answer(header, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+@router.callback_query(F.data == "adm:subs")
+async def cb_subs(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer()
+    await _show_subscribers(callback.message, 0)
+
+
+@router.callback_query(F.data.startswith("adm:subs:page:"))
+async def cb_subs_page(callback: CallbackQuery) -> None:
+    page = int(callback.data.rsplit(":", 1)[1])
+    await callback.answer()
+    await _show_subscribers(callback.message, page)
+
+
+@router.callback_query(F.data.startswith("adm:sub:"))
+async def cb_sub_detail(callback: CallbackQuery) -> None:
+    uid = int(callback.data.rsplit(":", 1)[1])
+    await callback.answer()
+    user = await crud.get_or_create_user(uid)
+    sub = await crud.get_active_subscription(uid)
+    plan = await crud.get_plan(sub.plan_id) if (sub and sub.plan_id) else None
+    # попробуем показать имя/username
+    handle = ""
+    try:
+        chat = await callback.bot.get_chat(uid)
+        handle = ("@" + chat.username) if chat.username else (chat.full_name or "")
+    except Exception:  # noqa: BLE001
+        pass
+    lines = [f"👤 <b>Подписчик {uid}</b>"]
+    if handle:
+        lines.append(f"Имя: {handle}")
+    if sub:
+        lines.append(f"Действует до: <b>{format_dt(sub.end_at, user.timezone)}</b>")
+        lines.append(f"Тариф: {plan.title('ru') if plan else 'вручную/импорт'}")
+    else:
+        lines.append("Активной подписки нет.")
+    lines.append(f"Автопродление: {'вкл' if user.auto_renew else 'выкл'}")
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🗑 Удалить подписку", callback_data=f"adm:subdel:{uid}")],
+        [InlineKeyboardButton(text="← К списку", callback_data="adm:subs")],
+    ])
+    await callback.message.answer("\n".join(lines), reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("adm:subdel:"))
+async def cb_sub_del(callback: CallbackQuery, config: Config) -> None:
+    uid = int(callback.data.rsplit(":", 1)[1])
+    n = await crud.revoke_user_subscriptions(uid)
+    # снять доступ в канале
+    if config.channel_chat_id:
+        try:
+            await callback.bot.ban_chat_member(config.channel_chat_id, uid)
+            await callback.bot.unban_chat_member(config.channel_chat_id, uid, only_if_banned=True)
+        except Exception:  # noqa: BLE001
+            logger.exception("Не удалось удалить из канала uid=%s", uid)
+    # уведомить пользователя
+    try:
+        u = await crud.get_or_create_user(uid)
+        await callback.bot.send_message(uid, t("subscription_revoked", normalize_lang(u.language)))
+    except Exception:  # noqa: BLE001
+        pass
+    await callback.answer(f"Отозвано подписок: {n}")
+    await _show_subscribers(callback.message, 0)

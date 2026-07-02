@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from db.database import get_sessionmaker
 from db.models import (Admin, Payment, Plan, ReminderLog, ReminderRule,
@@ -199,6 +199,45 @@ async def set_subscription_status(sub_id: int, status: str) -> None:
 
 async def has_active_subscription(user_id: int) -> bool:
     return await get_active_subscription(user_id) is not None
+
+
+async def count_active_subscribers() -> int:
+    async with get_sessionmaker()() as session:
+        return await session.scalar(
+            select(func.count(func.distinct(Subscription.user_id))).where(
+                Subscription.status == "active", Subscription.end_at > utcnow())
+        ) or 0
+
+
+async def list_active_subscribers(limit: int = 8, offset: int = 0) -> list[Subscription]:
+    """Активные подписки (end_at в будущем), для просмотра админом."""
+    async with get_sessionmaker()() as session:
+        return list(await session.scalars(
+            select(Subscription)
+            .where(Subscription.status == "active", Subscription.end_at > utcnow())
+            .order_by(Subscription.end_at)
+            .limit(limit).offset(offset)
+        ))
+
+
+async def revoke_user_subscriptions(user_id: int) -> int:
+    """Отзывает все активные подписки пользователя, выключает автопродление и токен.
+
+    Возвращает число отозванных подписок.
+    """
+    async with get_sessionmaker()() as session:
+        subs = list(await session.scalars(
+            select(Subscription).where(
+                Subscription.user_id == user_id, Subscription.status == "active")
+        ))
+        for sub in subs:
+            sub.status = "expired"
+        user = await session.get(User, user_id)
+        if user:
+            user.auto_renew = False
+            user.allpay_token = None
+        await session.commit()
+        return len(subs)
 
 
 # ---------- Администраторы (динамические) ----------

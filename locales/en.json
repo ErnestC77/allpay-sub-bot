@@ -34,6 +34,7 @@
   "channel_access": "🔓 Access to the private channel is open!\nTap the button below to join (single-use link).",
   "channel_join_button": "🚪 Join the channel",
   "subscription_expired": "⌛ Your subscription has ended, access to the private channel is paused.\nRenew to come back.",
+  "subscription_revoked": "⛔ Your subscription was cancelled by the administrator. Access to the private channel is paused.",
   "auto_on": "☑️ Auto-renewal",
   "auto_off": "◻️ Auto-renewal",
   "auto_renew_ok": "🔁 Auto-renewal done!\nSubscription active until <b>{date}</b>.",
