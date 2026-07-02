@@ -365,8 +365,38 @@ async def import_date(message: Message, state: FSMContext) -> None:
     await state.update_data(end_iso=end_at.isoformat())
     await state.set_state(AdminImport.ids)
     await message.answer(
-        "Шаг 2/2. Пришлите Telegram ID подписчиков — через пробел, запятую или с новой строки.\n"
-        "Пример: <code>910256253 12345678 87654321</code>")
+        "Шаг 2/2. Пришлите подписчиков — <b>ID</b> или <b>@username</b> "
+        "(вперемешку), через пробел, запятую или с новой строки.\n"
+        "Пример: <code>910256253 @ivan_petrov @nastya</code>\n\n"
+        "⚠️ @username сработает только для тех, у кого он задан публично.")
+
+
+async def _resolve_targets(bot, tokens: list[str]) -> tuple[list[int], list[str]]:
+    """Превращает ID/@username в user_id. Возвращает (id-шники, неразрешённые)."""
+    ids: list[int] = []
+    unresolved: list[str] = []
+    seen: set[int] = set()
+    for tok in tokens:
+        tok = tok.strip()
+        if not tok:
+            continue
+        if tok.lstrip("-").isdigit():
+            uid = int(tok)
+        else:
+            uname = tok.lstrip("@")
+            try:
+                chat = await bot.get_chat("@" + uname)
+                if chat.type != "private":   # это канал/группа, а не пользователь
+                    unresolved.append(tok)
+                    continue
+                uid = chat.id
+            except Exception:  # noqa: BLE001 — не найден / нет username
+                unresolved.append(tok)
+                continue
+        if uid not in seen:
+            seen.add(uid)
+            ids.append(uid)
+    return ids, unresolved
 
 
 @router.message(AdminImport.ids, F.text)
@@ -377,15 +407,15 @@ async def import_ids(message: Message, state: FSMContext) -> None:
     await state.clear()
     end_at = datetime.fromisoformat(data["end_iso"])
 
-    raw = (message.text or "").replace(",", " ").replace("\n", " ")
-    ids = [int(tok) for tok in raw.split() if tok.strip().lstrip("-").isdigit()]
-    if not ids:
-        await message.answer("❌ Не нашёл ни одного числового ID. Начните заново: /admin")
+    tokens = (message.text or "").replace(",", " ").split()
+    ids, unresolved = await _resolve_targets(message.bot, tokens)
+    if not ids and not unresolved:
+        await message.answer("❌ Пусто. Начните заново: /admin")
         return
 
     added = notified = 0
     failed_notify: list[int] = []
-    for uid in dict.fromkeys(ids):  # уникальные, сохраняя порядок
+    for uid in ids:
         try:
             sub = await crud.grant_subscription(uid, end_at)
             added += 1
@@ -407,6 +437,9 @@ async def import_ids(message: Message, state: FSMContext) -> None:
               f"⚠️ Не удалось написать (не запускали бота): <b>{len(failed_notify)}</b>")
     if failed_notify:
         report += "\n<code>" + " ".join(str(x) for x in failed_notify[:100]) + "</code>"
+    if unresolved:
+        report += ("\n\n🚫 Не удалось определить (нет публичного @username / не найдены):\n"
+                   + " ".join(unresolved[:100]))
     await message.answer(report)
 
 
