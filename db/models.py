@@ -20,6 +20,7 @@ class User(Base):
     __tablename__ = "users"
 
     tg_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     language: Mapped[str | None] = mapped_column(String(8), nullable=True)
     timezone: Mapped[str] = mapped_column(String(16), default="UTC")
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)

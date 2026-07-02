@@ -391,6 +391,8 @@ async def _resolve_targets(bot, tokens: list[str]) -> tuple[list[int], list[str]
                     unresolved.append(tok)
                     continue
                 uid = chat.id
+                if chat.username:
+                    await crud.set_username(uid, chat.username)
             except Exception:  # noqa: BLE001 — не найден / нет username
                 unresolved.append(tok)
                 continue
@@ -517,8 +519,18 @@ async def _show_subscribers(message: Message, page: int) -> None:
     rows = []
     for s in subs:
         u = await crud.get_or_create_user(s.user_id)
+        name = u.username
+        if not name:   # подтягиваем ник на лету и запоминаем
+            try:
+                chat = await message.bot.get_chat(s.user_id)
+                if chat.username:
+                    name = chat.username
+                    await crud.set_username(s.user_id, name)
+            except Exception:  # noqa: BLE001
+                pass
+        label = f"@{name}" if name else str(s.user_id)
         rows.append([InlineKeyboardButton(
-            text=f"👤 {s.user_id} · до {format_dt(s.end_at, u.timezone)[:10]}",
+            text=f"👤 {label} · до {format_dt(s.end_at, u.timezone)[:10]}",
             callback_data=f"adm:sub:{s.user_id}")])
     nav = []
     if page > 0:

@@ -31,6 +31,22 @@ async def set_user_language(tg_id: int, lang: str) -> None:
             await session.commit()
 
 
+async def set_username(tg_id: int, username: str | None) -> None:
+    """Запоминает @username пользователя (создаёт запись при отсутствии)."""
+    if not username:
+        return
+    async with get_sessionmaker()() as session:
+        user = await session.get(User, tg_id)
+        if user is None:
+            user = User(tg_id=tg_id, username=username)
+            session.add(user)
+            await session.commit()
+            return
+        if user.username != username:
+            user.username = username
+            await session.commit()
+
+
 async def set_user_email(tg_id: int, email: str) -> None:
     async with get_sessionmaker()() as session:
         user = await session.get(User, tg_id)

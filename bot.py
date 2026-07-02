@@ -13,6 +13,7 @@ from config import load_config
 from db.database import init_db, init_engine
 from handlers import (account, admin, chatinfo, menu, plans, purchase, start,
                       subscription, support)
+from middlewares import UsernameMiddleware
 from payments.webhook import setup_routes
 from scheduler import reminder_worker
 
@@ -26,6 +27,9 @@ logger = logging.getLogger("bot")
 def build_dispatcher(config) -> Dispatcher:
     dp = Dispatcher()
     dp["config"] = config
+    # Запоминаем @username всех, кто пишет боту / жмёт кнопки.
+    dp.message.middleware(UsernameMiddleware())
+    dp.callback_query.middleware(UsernameMiddleware())
     # Порядок важен: команды и FSM-роутеры раньше, общий текстовый обработчик меню — последним.
     dp.include_router(chatinfo.router)
     dp.include_router(start.router)

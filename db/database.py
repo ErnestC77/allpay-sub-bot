@@ -36,6 +36,7 @@ _DEFAULT_PLANS = [
 # Лёгкие миграции для уже существующих таблиц (Postgres). На свежей SQLite колонки
 # создаёт create_all, а эти ALTER просто молча отваливаются (обёрнуты в try).
 _MIGRATIONS = [
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(64)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_renew BOOLEAN DEFAULT FALSE",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS allpay_token VARCHAR(128)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS card_mask VARCHAR(32)",
